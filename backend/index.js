@@ -11,38 +11,6 @@ const bcrypt = require("bcryptjs")
 const db = require("./db.js");
 
 
-// configure JWT
-const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || "devsecret"
-function sign(user) {
-    const payload = {
-        uid: user.id,
-        email: user.email,
-    }
-    const options = {
-        expiresIn: '7d',
-    }
-    return jwt.sign(payload, JWT_SECRET, options);
-}
-function auth(req, res, next) {
-    const token = (req.headers.authorization || "")
-        .replace(/^Bearer\s+/i, "");
-    if (!token) {
-        return res
-            .status(401)
-            .json({error: "Missing Token"});
-    }
-    try {
-        req.user = jwt.verify(token, JWT_SECRET);
-        next();
-    } catch {
-        return res
-            .status(401)
-            .json({ error: "Invalid Token" });
-    }
-}
-
-
 // configure auth
 app.post("/auth/register", async (req, res) => {
     const { first, last, email, password } = req.body || {};
@@ -51,7 +19,6 @@ app.post("/auth/register", async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
-    console.log(typeof hash, hash);
     try {
         const { rows } = await db.query(
             `INSERT INTO users (first, last, email, password)
@@ -59,7 +26,7 @@ app.post("/auth/register", async (req, res) => {
                RETURNING id, first, last, email`,
             [first, last, email, hash]
         );
-        return res.json({ user: rows[0], token: sign(rows[0]) });
+        return res.json({ user: rows[0], token: "dummy-token" });
     } catch (e) {
         if (e.code === "23505") {
             return res.status(409).json({ error:"Email already in use" });
@@ -87,7 +54,7 @@ app.post("/auth/login", async (req, res) => {
 
     return res.json({
         user: { id: user.id, first: user.first, last: user.last, email: user.email },
-        token: sign(user)
+        token: "dummy-token"
     });
 });
 
@@ -125,24 +92,43 @@ app.get("/tags", async(_req, res) => {
 });
 
 app.get("/events", async(req, res) => {
-    const uid = req.user?.uid;
-    if (uid === undefined) {
-        return res.status(400).json({ error: "missing uid field" });
+    const { uid } = req.query;
+    if (!uid) {
+        return res.status(400).json({ error: "User ID is required" });
     }
 
     try {
+        // Get events based on user interests
         const {rows} = await db.query(
-            `SELECT DISTINCT e.eid, e.name, e.datetime, e.cost
+            `SELECT DISTINCT e.eid, e.name, e.datetime, e.description, e.cost, e.numAttendees, i.interest
             FROM userinterests ui
             JOIN interestevents ie ON ui.iid=ie.iid
             JOIN events e ON e.eid=ie.eid
+            JOIN interests i ON i.iid=e.iid
             WHERE ui.uid=$1
             AND e.datetime > now()
             ORDER BY e.datetime ASC
             LIMIT 100`,
             [uid]
         );
-        res.json(rows);
+        
+        // Transform the data to match frontend format
+        const events = rows.map(row => ({
+            id: row.eid.toString(),
+            title: row.name,
+            description: row.description,
+            date: new Date(row.datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            time: new Date(row.datetime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+            location: 'Student Center', // Default location
+            organizer: 'AI Organized',
+            attendees: row.numattendees || 0,
+            maxAttendees: 20, // Default max attendees
+            tags: [row.interest],
+            isInterested: false,
+            isAttending: false
+        }));
+        
+        res.json(events);
     } catch(e) {
         console.log(e);
         res.status(500).json({"error": "failed to fetch personalized events"});
@@ -177,7 +163,7 @@ class ProfileSetters {
                 UPDATE users 
                 SET first=COALESCE($1,first),
                     last=COALESCE($2,last)
-                WHERE uid=$3`,
+                WHERE id=$3`,
             [first ?? null, last ?? null, uid]
         );
     }
@@ -218,9 +204,11 @@ class ProfileSetters {
         }
     }
 }
-app.put("/profile", auth, async (req,res) => {
-    const uid = req.user.uid;
-    const { first, last, interests } = req.body || {}
+app.put("/profile", async (req,res) => {
+    const { uid, first, last, interests } = req.body || {}
+    if (!uid) {
+        return res.status(400).json({ error: "User ID is required" });
+    }
     if (first !== undefined && typeof first !== "string")
         return res.status(400).json({ error: "first must be a string" });
     if (last !== undefined && typeof last !== "string")
@@ -246,6 +234,58 @@ app.put("/profile", auth, async (req,res) => {
         return res.status(500).json({ error: "Failed to update profile" });
     } finally{
         client.release();
+    }
+});
+
+// Get user stats
+app.get("/user/:uid", async (req, res) => {
+    const { uid } = req.params;
+    
+    try {
+        // Get user basic info
+        const { rows: userRows } = await db.query(
+            `SELECT id, first, last, email, totalSeen, totalAccepted, created_at 
+             FROM users WHERE id = $1`,
+            [uid]
+        );
+        
+        if (userRows.length === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        
+        const user = userRows[0];
+        
+        // Get user interests
+        const { rows: interestRows } = await db.query(`
+            SELECT i.interest
+            FROM userinterests ui
+            JOIN interests i ON ui.iid = i.iid
+            WHERE ui.uid = $1
+            ORDER BY i.interest
+        `, [uid]);
+        
+        const interests = interestRows.map(row => row.interest);
+        
+        // Get events attended count (from totalAccepted)
+        const eventsAttended = user.totalaccepted || 0;
+        
+        // Get events seen count (from totalSeen)
+        const eventsSeen = user.totalseen || 0;
+        
+        res.json({
+            id: user.id,
+            first: user.first,
+            last: user.last,
+            email: user.email,
+            interests,
+            eventsSeen,
+            eventsAttended,
+            createdAt: user.created_at
+        });
+        
+    } catch (error) {
+        console.error('Error fetching user stats:', error);
+        res.status(500).json({ error: "Failed to fetch user stats" });
     }
 });
 

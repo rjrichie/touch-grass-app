@@ -53,36 +53,9 @@ export default function App() {
       const savedCalendarEvents = localStorage.getItem('touchGrassCalendarEvents');
       const savedEventRSVPs = localStorage.getItem('touchGrassEventRSVPs');
       
-      // Also check cookies for authentication
-      let cookieAuthState = null;
-      try {
-        const { isAuthenticated, getUserId } = require('./utils/cookies');
-        if (isAuthenticated()) {
-          const userId = getUserId();
-          cookieAuthState = {
-            isLoggedIn: true,
-            hasCompletedProfile: false, // Will be updated if localStorage has profile
-            userId: userId
-          };
-        }
-      } catch (error) {
-        console.warn('Cookies not available yet, using localStorage only');
-      }
-      
       if (savedUserState) {
         const parsedUserState = JSON.parse(savedUserState);
-        // If we have cookie auth, merge it with saved state
-        if (cookieAuthState) {
-          setUserState({
-            ...parsedUserState,
-            isLoggedIn: true,
-            userId: cookieAuthState.userId
-          });
-        } else {
-          setUserState(parsedUserState);
-        }
-      } else if (cookieAuthState) {
-        setUserState(cookieAuthState);
+        setUserState(parsedUserState);
       }
       
       if (savedProfile) {
@@ -198,13 +171,6 @@ export default function App() {
       console.error('Error clearing localStorage:', error);
     }
     
-    // Clear authentication cookies
-    try {
-      const { clearAuthCookies } = require('./utils/cookies');
-      clearAuthCookies();
-    } catch (error) {
-      console.error('Error clearing auth cookies:', error);
-    }
     
     handleScreenChange('welcome');
   };
@@ -406,6 +372,7 @@ export default function App() {
         <ProfileSetup 
           onNext={handleProfileSetupComplete}
           onProfileUpdate={handleProfileUpdate}
+          userId={userState.userId || ''}
         />
       )}
       
@@ -439,6 +406,7 @@ export default function App() {
               console.error('Error saving RSVP status to localStorage:', error);
             }
           }}
+          userId={userState.userId || ''}
         />
       )}
 

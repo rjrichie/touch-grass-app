@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -9,6 +9,7 @@ import { CalendarEvent } from './Calendar';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { SmallDecorationIllustration, EventsIllustration } from './Illustrations';
 import { EVENTS_DATA, Event, filterEventsByInterests } from './EventsData';
+import { eventsAPI } from '../utils/api';
 
 interface EventFeedProps {
   userProfile: UserProfile;
@@ -17,10 +18,35 @@ interface EventFeedProps {
   eventRSVPs: Record<string, { isInterested: boolean; isAttending: boolean }>;
   onAddToCalendar: (event: Event) => void;
   onUpdateRSVP: (eventId: string, rsvpStatus: { isInterested: boolean; isAttending: boolean }) => void;
+  userId: string;
 }
 
-export function EventFeed({ userProfile, onSwitchToAIChat, calendarEvents, eventRSVPs, onAddToCalendar, onUpdateRSVP }: EventFeedProps) {
-  const [events, setEvents] = useState<Event[]>(EVENTS_DATA);
+export function EventFeed({ userProfile, onSwitchToAIChat, calendarEvents, eventRSVPs, onAddToCalendar, onUpdateRSVP, userId }: EventFeedProps) {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+
+  // Fetch events from API
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setLoading(true);
+        const apiEvents = await eventsAPI.getEvents(userId);
+        setEvents(apiEvents);
+      } catch (err: any) {
+        console.error('Error fetching events:', err);
+        setError(err?.error || 'Failed to load events');
+        // Fallback to static data if API fails
+        setEvents(EVENTS_DATA);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) {
+      fetchEvents();
+    }
+  }, [userId]);
   
   // Filter events based on user interests
   const filteredEvents = useMemo(() => {
@@ -63,6 +89,28 @@ export function EventFeed({ userProfile, onSwitchToAIChat, calendarEvents, event
         : event
     ));
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-accent/5 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading events...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-accent/5 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-destructive mb-4">{error}</p>
+          <p className="text-muted-foreground">Showing fallback events...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen overflow-y-auto texture-paper relative">

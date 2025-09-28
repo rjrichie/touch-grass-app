@@ -1,18 +1,39 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Edit, MapPin, Clock, Users, Heart, LogOut } from 'lucide-react';
 import { UserProfile } from '../App';
+import { userAPI, UserStatsResponse } from '../utils/api';
 
 interface ProfileSidebarProps {
   userProfile: UserProfile;
   onEdit: () => void;
   onLogout?: () => void;
+  userId: string;
 }
 
-export function ProfileSidebar({ userProfile, onEdit, onLogout }: ProfileSidebarProps) {
+export function ProfileSidebar({ userProfile, onEdit, onLogout, userId }: ProfileSidebarProps) {
+  const [userStats, setUserStats] = useState<UserStatsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      try {
+        const stats = await userAPI.getStats(userId);
+        setUserStats(stats);
+      } catch (error) {
+        console.error('Error fetching user stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) {
+      fetchUserStats();
+    }
+  }, [userId]);
   const getGroupSizeLabel = (size: string) => {
     switch (size) {
       case 'small': return 'Small groups (2-5)';
@@ -116,18 +137,20 @@ export function ProfileSidebar({ userProfile, onEdit, onLogout }: ProfileSidebar
           <CardTitle className="text-sm">Quick Stats</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Events attended</span>
-            <span className="text-foreground">12</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Events organized</span>
-            <span className="text-foreground">3</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Connections made</span>
-            <span className="text-foreground">27</span>
-          </div>
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading stats...</div>
+          ) : (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Events seen</span>
+                <span className="text-foreground">{userStats?.eventsSeen || 0}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Events attended</span>
+                <span className="text-foreground">{userStats?.eventsAttended || 0}</span>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

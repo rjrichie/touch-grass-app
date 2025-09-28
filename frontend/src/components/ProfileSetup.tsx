@@ -7,13 +7,15 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Badge } from './ui/badge';
 import { X } from 'lucide-react';
 import { UserProfile } from '../App';
+import { profileAPI } from '../utils/api';
 
 interface ProfileSetupProps {
   onNext: () => void;
   onProfileUpdate: (profile: UserProfile) => void;
+  userId: string;
 }
 
-export function ProfileSetup({ onNext, onProfileUpdate }: ProfileSetupProps) {
+export function ProfileSetup({ onNext, onProfileUpdate, userId }: ProfileSetupProps) {
   const [name, setName] = useState('');
   const [year, setYear] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
@@ -21,6 +23,8 @@ export function ProfileSetup({ onNext, onProfileUpdate }: ProfileSetupProps) {
   const [groupSize, setGroupSize] = useState('');
   const [genderPreference, setGenderPreference] = useState('');
   const [timePreference, setTimePreference] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>('');
   const predefinedInterests = [
     'Sports', 'Gaming', 'Music', 'Art', 'Technology', 'Food', 'Movies', 
     'Fitness', 'Reading', 'Travel', 'Photography', 'Dance'
@@ -37,21 +41,44 @@ export function ProfileSetup({ onNext, onProfileUpdate }: ProfileSetupProps) {
     setInterests(interests.filter(i => i !== interest));
   };
 
-  const handleSubmit = () => {
-    const profile: UserProfile = {
-      name,
-      year,
-      interests,
-      preferences: {
-        groupSize,
-        genderPreference,
-        timePreference
-      },
-      community: ''
-    };
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    setError('');
     
-    onProfileUpdate(profile);
-    onNext();
+    try {
+      // Extract first and last name from the name field
+      const nameParts = name.trim().split(' ');
+      const first = nameParts[0] || '';
+      const last = nameParts.slice(1).join(' ') || '';
+      
+      // Call the backend API to update profile
+      await profileAPI.update({
+        uid: userId,
+        first,
+        last,
+        interests
+      });
+      
+      const profile: UserProfile = {
+        name,
+        year,
+        interests,
+        preferences: {
+          groupSize,
+          genderPreference,
+          timePreference
+        },
+        community: ''
+      };
+      
+      onProfileUpdate(profile);
+      onNext();
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      setError(error?.error || 'Failed to update profile. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const isFormValid = name && year && interests.length > 0 && groupSize && genderPreference && timePreference;
@@ -225,12 +252,18 @@ export function ProfileSetup({ onNext, onProfileUpdate }: ProfileSetupProps) {
             </RadioGroup>
           </div>
 
+          {error && (
+            <div className="text-red-500 text-sm text-center">
+              {error}
+            </div>
+          )}
+          
           <Button 
             onClick={handleSubmit} 
             className="w-full" 
-            disabled={!isFormValid}
+            disabled={!isFormValid || isLoading}
           >
-            Continue to Community Selection
+            {isLoading ? 'Saving Profile...' : 'Continue to Community Selection'}
           </Button>
         </CardContent>
       </Card>

@@ -7,7 +7,6 @@ import { Separator } from './ui/separator';
 import { Eye, EyeOff, TreePine, Sprout, Mountain } from 'lucide-react';
 import { Illustrations } from './Illustrations';
 import { authAPI, ApiError } from '../utils/api';
-import { setCookie, COOKIE_NAMES } from '../utils/cookies';
 
 interface LoginProps {
   onLogin: (userId: string) => void;
@@ -30,10 +29,6 @@ export function Login({ onLogin, onSwitchToSignup, onBack }: LoginProps) {
     try {
       // Call the login API
       const response = await authAPI.login(email, password);
-
-      // Store the JWT token and user ID in cookies
-      setCookie(COOKIE_NAMES.AUTH_TOKEN, response.token, 7); // 7 days
-      setCookie(COOKIE_NAMES.USER_ID, response.user.id, 7);
 
       setIsLoading(false);
       // Call the success callback with the user ID
