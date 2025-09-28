@@ -2,6 +2,7 @@ export interface Event {
   id: string;
   title: string;
   description: string;
+  datetimeISO?: string;
   date: string;
   time: string;
   location: string;

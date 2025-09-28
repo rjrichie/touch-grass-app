@@ -131,10 +131,11 @@ export const userAPI = {
 };
 
 // Events API functions
+import { Event } from '../components/EventsData';
+
 export const eventsAPI = {
-  getEvents: async (userId: string): Promise<any[]> => {
-    return apiCall<any[]>(`${API_ENDPOINTS.EVENTS.GET}?uid=${userId}`, {
-      method: 'GET',
-    });
+  getEvents: async (userId?: string): Promise<Event[]> => {
+    const endpoint = userId ? `${API_ENDPOINTS.EVENTS.GET}?uid=${userId}` : API_ENDPOINTS.EVENTS.GET;
+    return apiCall<Event[]>(endpoint, { method: 'GET' });
   },
 };

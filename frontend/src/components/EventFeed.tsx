@@ -31,8 +31,9 @@ export function EventFeed({ userProfile, onSwitchToAIChat, calendarEvents, event
     const fetchEvents = async () => {
       try {
         setLoading(true);
-        const apiEvents = await eventsAPI.getEvents(userId);
-        setEvents(apiEvents);
+  const apiEvents = await eventsAPI.getEvents(userId || undefined);
+  console.log('[EventFeed] fetched events from API:', apiEvents?.length ?? 0, apiEvents?.slice?.(0,2));
+  setEvents(apiEvents);
       } catch (err: any) {
         console.error('Error fetching events:', err);
         setError(err?.error || 'Failed to load events');
@@ -43,9 +44,7 @@ export function EventFeed({ userProfile, onSwitchToAIChat, calendarEvents, event
       }
     };
 
-    if (userId) {
-      fetchEvents();
-    }
+    fetchEvents();
   }, [userId]);
   
   // Filter events based on user interests
@@ -53,8 +52,67 @@ export function EventFeed({ userProfile, onSwitchToAIChat, calendarEvents, event
     return filterEventsByInterests(events, userProfile.interests);
   }, [events, userProfile.interests]);
 
-  // Show filtered events if user has interests and matches found, otherwise show all events
-  const displayEvents = userProfile.interests.length > 0 && filteredEvents.length > 0 ? filteredEvents : events;
+  // Sort events: events that match user interests first, then by date ascending
+  const displayEvents = useMemo(() => {
+    const hasInterests = userProfile.interests.length > 0;
+
+    // copy to avoid mutating state
+    const copy = [...events];
+
+    copy.sort((a, b) => {
+      // interested-first
+  const aMatch = hasInterests ? a.isInterested || (a.tags || []).some((t: string) => userProfile.interests.map(i => i.toLowerCase()).includes(String(t).toLowerCase())) : false;
+  const bMatch = hasInterests ? b.isInterested || (b.tags || []).some((t: string) => userProfile.interests.map(i => i.toLowerCase()).includes(String(t).toLowerCase())) : false;
+      if (aMatch && !bMatch) return -1;
+      if (!aMatch && bMatch) return 1;
+
+      // then by date - prefer datetimeISO if available
+      const aDate = a.datetimeISO ? new Date(a.datetimeISO) : parseDisplayDate(a.date, a.time);
+      const bDate = b.datetimeISO ? new Date(b.datetimeISO) : parseDisplayDate(b.date, b.time);
+      return aDate.getTime() - bDate.getTime();
+    });
+
+    // If user has interests and matches found, show only matches; otherwise show all
+  const matches = copy.filter((e: Event) => (userProfile.interests.length > 0) && (e.isInterested || (e.tags || []).some((t: string) => userProfile.interests.map(i => i.toLowerCase()).includes(String(t).toLowerCase()))));
+    if (userProfile.interests.length > 0 && matches.length > 0) return matches;
+    return copy;
+  }, [events, userProfile.interests]);
+
+  // Helper to parse display date/time fallbacks (very naive)
+  function parseDisplayDate(dateStr?: string, timeStr?: string) {
+    try {
+      if (!dateStr) return new Date(0);
+      // Date like 'Nov 25' or 'Dec 1' -> add current year
+      const year = new Date().getFullYear();
+      const combined = `${dateStr} ${year} ${timeStr || ''}`;
+      const parsed = new Date(combined);
+      if (!isNaN(parsed.getTime())) return parsed;
+    } catch {}
+    return new Date(0);
+  }
+
+  // Format an event's date+time for display, preferring datetimeISO when present
+  function formatEventDateTime(event: Event) {
+    try {
+      if (event.datetimeISO) {
+        const d = new Date(event.datetimeISO);
+        if (!isNaN(d.getTime())) {
+          return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+        }
+      }
+
+      const parsed = parseDisplayDate(event.date, event.time);
+      if (!isNaN(parsed.getTime()) && parsed.getTime() !== 0) {
+        return `${parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · ${parsed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      }
+    } catch {}
+
+    // Last-resort: show whatever pieces exist
+    const pieces = [] as string[];
+    if (event.date) pieces.push(event.date);
+    if (event.time) pieces.push(event.time);
+    return pieces.join(' · ');
+  }
 
   // Helper function to check if event is in calendar
   const isEventInCalendar = (eventId: string) => {
@@ -179,7 +237,7 @@ export function EventFeed({ userProfile, onSwitchToAIChat, calendarEvents, event
                 <div className="grid grid-cols-1 gap-2 text-xs">
                   <div className="flex items-center gap-2 p-2 bg-accent/30 rounded-md border-organic">
                     <Clock className="w-4 h-4 text-primary" />
-                    <span className="font-medium">{event.time}</span>
+                    <span className="font-medium">{formatEventDateTime(event)}</span>
                   </div>
                   <div className="flex items-center gap-2 p-2 bg-accent/30 rounded-md border-organic">
                     <MapPin className="w-4 h-4 text-primary" />

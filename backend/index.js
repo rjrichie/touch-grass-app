@@ -92,46 +92,45 @@ app.get("/tags", async(_req, res) => {
 });
 
 app.get("/events", async(req, res) => {
-    const { uid } = req.query;
-    if (!uid) {
-        return res.status(400).json({ error: "User ID is required" });
-    }
+    // Returns upcoming events. If uid is provided, the response will include
+    // whether each event aligns with that user's interests (is_interested).
+    const uid = req.query.uid || null;
 
     try {
-        // Get events based on user interests
-        const {rows} = await db.query(
-            `SELECT DISTINCT e.eid, e.name, e.datetime, e.description, e.cost, e.numAttendees, i.interest
-            FROM userinterests ui
-            JOIN interestevents ie ON ui.iid=ie.iid
-            JOIN events e ON e.eid=ie.eid
-            JOIN interests i ON i.iid=e.iid
-            WHERE ui.uid=$1
-            AND e.datetime > now()
-            ORDER BY e.datetime ASC
-            LIMIT 100`,
+        const { rows } = await db.query(
+            `SELECT e.eid, e.name, e.datetime, e.description, e.cost, e.numattendees,
+                    i.interest,
+                    CASE WHEN ui.uid IS NOT NULL THEN true ELSE false END AS is_interested
+             FROM events e
+             LEFT JOIN interests i ON i.iid = e.iid
+             LEFT JOIN userinterests ui ON ui.iid = e.iid AND ui.uid = $1
+             WHERE e.datetime > now()
+             ORDER BY e.datetime ASC
+             LIMIT 500`,
             [uid]
         );
-        
-        // Transform the data to match frontend format
+
         const events = rows.map(row => ({
-            id: row.eid.toString(),
+            id: String(row.eid),
             title: row.name,
             description: row.description,
+            // Keep a machine-readable ISO so frontend can sort reliably
+            datetimeISO: row.datetime,
             date: new Date(row.datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             time: new Date(row.datetime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-            location: 'Student Center', // Default location
+            location: 'Student Center',
             organizer: 'AI Organized',
             attendees: row.numattendees || 0,
-            maxAttendees: 20, // Default max attendees
-            tags: [row.interest],
-            isInterested: false,
+            maxAttendees: 20,
+            tags: row.interest ? [row.interest] : [],
+            isInterested: !!row.is_interested,
             isAttending: false
         }));
-        
+
         res.json(events);
-    } catch(e) {
-        console.log(e);
-        res.status(500).json({"error": "failed to fetch personalized events"});
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'failed to fetch events' });
     }
 });
 
