@@ -1,148 +1,204 @@
-# Touch Grass - Event Planning App
-
-A full-stack event planning application that helps users find and join community events based on their interests.
-
-## Architecture
-
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS
-- **Backend**: Node.js + Express + PostgreSQL
-- **Authentication**: JWT tokens
-
-## Project Structure
-
-```
-│   ├── db.js         # Database connection
-│   ├── schema.sql    # Database schema
 # Touch Grass — Community Event Planner
 
-Touch Grass is a full-stack app for discovering, planning, and joining community events tailored to users' interests. It includes an AI-driven event planner on the backend that can generate event suggestions, a PostgreSQL-backed API, and a React + TypeScript frontend.
+Touch Grass is a full-stack app for discovering, planning, and joining local events based on shared interests. When enough nearby users share the same interest (e.g., hiking, mini golf, watching the Eagles), an AI agent proposes and schedules a real-world event, stores it in PostgreSQL, and notifies users.
 
-## What this app does
-- Let users create a profile containing interests and community preferences.
-- Generate curated event suggestions using an AI planner and store them in PostgreSQL.
-- Serve personalized event feeds via an Express API.
-- Provide RSVP, calendar integration, and in-app chat for events.
+---
 
-## Why Touch Grass?
+## Features
+- User profiles with interests and tags.
+- AI-generated events (Gemini) grounded with venue data.
+- PostgreSQL-backed API served via Express.
+- React + TypeScript frontend (Vite + Tailwind).
+- JWT authentication, RSVP, and event feeds.
 
-Meeting new people shouldn't be so hard. Two common barriers stand in the way: discovering the right groups, and actually breaking into them. Touch Grass tackles both. Tell the app what you care about and, when enough nearby people share that interest, an AI agent will automatically create and schedule a real-world event (for example, a sports watch party at a nearby bar). Users receive notifications for events that match their interests and can RSVP with a single tap — no awkward group-searching, no lengthy planning. The result is a low-friction path from interest to community: more spontaneous meetups, easier local connections, and a smoother way to turn strangers into acquaintances and, eventually, friends.
+---
 
 ## Architecture
-- Frontend: React + TypeScript + Vite + Tailwind CSS
-- Backend: Node.js + Express
-- Database: PostgreSQL
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS  
+- **Backend:** Node.js, Express  
+- **Database:** PostgreSQL  
+- **Auth:** JWT  
 
-## Repo layout
-```
-touch-grass-app/
-├── backend/          # Node.js/Express API and seed scripts
-├── frontend/         # React + Vite app
-├── Dockerfile        # Optional containerization
-└── README.md         # (this file)
-```
+---
 
-## Quickstart (local development)
-Prerequisites:
-- Node.js (>= 18)
-- PostgreSQL
-- npm or yarn
+## Quick Start (Local Development)
 
-1) Install dependencies (from repo root):
-
+### 1. Clone & install
 ```bash
-# from repository root
-npm run install:all
+npm install
+# or split repos:
+# (frontend) npm install
+# (backend)  npm install
 ```
 
-2) Create and configure the database
-- Create a PostgreSQL database for the app.
-- Run the schema SQL in `backend/schema.sql` to create tables.
-- Create a `.env` file inside `backend/` with at least:
+### 2. Backend environment
+Create `backend/.env`:
 
-```
-DATABASE_URL=postgresql://username:password@localhost:5432/your_db_name
+```env
+# Postgres (choose one style)
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/touch_grass
+
+# or discrete fields
+PGUSER=postgres
+PGPASSWORD=postgres
+PGHOST=127.0.0.1
+PGPORT=5432
+PGDATABASE=touch_grass
+
+# Server
 PORT=4000
+
+# AI (optional)
+GEMINI_API_KEY=your_key_here
+# optional overrides:
+# GEMINI_MODEL=gemini-1.5-flash-latest
+# SERPAPI_KEY=your_serpapi_key_here
 ```
 
-3) Seed example data (optional)
-- There are two seed helpers in `backend/`:
-  - `populate-events.js` — static sample events
-  - `populate-with-creator.js` — uses the app's event planner to generate events per interest and insert them into the DB
+> **Windows tip:** prefer `PGHOST=127.0.0.1` to avoid IPv6 (`::1`) issues.
 
-To run the AI-driven seeder (recommended when you want realistic events):
+### 3. Start PostgreSQL
 
+**Option A: Docker**
+```powershell
+docker run --name tg-postgres `
+  -e POSTGRES_USER=postgres `
+  -e POSTGRES_PASSWORD=postgres `
+  -e POSTGRES_DB=touch_grass `
+  -p 5432:5432 -d postgres:16
+```
+
+**Option B: Local install**  
+Install PostgreSQL (e.g., v16), create a DB `touch_grass`, and ensure credentials match `.env`.
+
+### 4. Apply schema
+```bash
+# Docker
+docker cp backend/schema.sql tg-postgres:/schema.sql
+docker exec -it tg-postgres psql -U postgres -d touch_grass -f /schema.sql
+
+# Local
+psql "postgres://postgres:postgres@127.0.0.1:5432/touch_grass" -f backend/schema.sql
+```
+
+### 5. (Optional) Seed example events
 ```bash
 cd backend
 node populate-with-creator.js
 ```
 
-You should see the script finish and insert events into your DB. (In this workspace it's been run already: exit code 0.)
+Requires `GEMINI_API_KEY` for best results. Without keys, the planner uses fallbacks.
 
-4) Run the app in development mode (root scripts available)
-
+### 6. Run the app
 ```bash
-# runs frontend and backend concurrently (if configured)
-- User authentication and registration
+# from repo root if you have scripts
+npm run dev
 
-# or run services individually
-- Profile setup with interests
-- Community selection
+# or run individually
+cd backend && node server.js
+cd frontend && npm run dev
 ```
 
-- Backend default: http://localhost:4000
-- Frontend default: http://localhost:5173
+- Backend: `http://localhost:4000`  
+- Frontend: `http://localhost:5173`
 
-## How to verify the Dashboard shows DB events
-- Ensure the backend is running and the database has events (see step 3).
-- Open the app in your browser and navigate to the Dashboard.
-- If you don't have an app profile yet, create one or set a demo profile in `localStorage` for quick testing:
+---
+
+## API (selected)
+
+- `POST /auth/register`  
+- `POST /auth/login`  
+- `GET  /interests`  
+- `GET  /tags`  
+- `GET  /events?uid=USER_ID`  
+- `GET  /events/:eid`  
+- `PUT  /profile`
+
+### Example request
+
+**Windows cmd.exe**
+```cmd
+curl -X POST http://localhost:4000/auth/register -H "Content-Type: application/json" -d "{ \"first\": \"John\", \"last\": \"Doe\", \"email\": \"john.doe@example.com\", \"password\": \"supersecret123\" }"
+```
+
+**Windows PowerShell**
+```powershell
+curl -X POST http://localhost:4000/auth/register -H "Content-Type: application/json" -d '{ "first": "John", "last": "Doe", "email": "john.doe@example.com", "password": "supersecret123" }'
+```
+
+---
+
+## AI Event Planner
+
+- **Entry point:** `backend/eventCreator.js`  
+- **Input:** interest string (e.g., `"hiking"`), existing events to avoid overlaps.  
+- **Process:**
+  1. Ideate with Gemini (or fallback).  
+  2. Ground with venue data (SerpAPI/Maps).  
+  3. Score & select best option.  
+  4. Finalize DB row (name, datetime, description, cost, numAttendees).  
+     - Always schedules **≥ 7 days out**.  
+     - Prefers Thu/Fri 7 pm, Sat late morning/afternoon, Sun early afternoon.  
+     - Skips conflicts with existing events.  
+
+- **Output example:**
+```json
+{
+  "name": "Hiking @ Piedmont Park",
+  "datetime": "2025-10-05T13:00:00-04:00",
+  "description": "Meetup: Hiking at Piedmont Park…",
+  "cost": 0,
+  "numAttendees": 0
+}
+```
+
+---
+
+## Frontend: verifying events
+
+1. Ensure `/events` returns rows.  
+2. Open the app and check the dashboard.  
+3. For demo mode, inject a profile:
 
 ```js
-// in browser console (on app root page)
-localStorage.setItem('touchGrassUserProfile', JSON.stringify({ name: 'Demo User', userId: '1', interests: ['Sports', 'Music'] }));
+localStorage.setItem('touchGrassUserProfile', JSON.stringify({
+  name: 'Demo User',
+  userId: '1',
+  interests: ['Hiking','Sports']
+}));
 location.reload();
 ```
 
-- Open DevTools → Network → filter by `GET /events` to inspect the API response.
-- The frontend also logs a brief message when fetching events (check the Console for `[EventFeed] fetched events from API:`).
-
-## API (selected endpoints)
-- POST /auth/register — register a new user
-- POST /auth/login — login
-- GET /interests — list available interests
-- GET /tags — list available tags
-- GET /events?uid=USER_ID — get events (optionally personalized if `uid` provided)
-- GET /events/:eid — get event details
-- PUT /profile — update user profile
-
-## Development notes
-- The backend includes an `eventCreator.js` module used by the `populate-with-creator.js` script to generate plausible events.
-- The frontend expects events to include a `datetimeISO` field where possible; the feed will prefer that value for sorting and display.
+---
 
 ## Troubleshooting
-- If you see hardcoded/fallback events in the UI:
-  - Confirm the backend `/events` API returns rows (Network tab).
-  - Confirm your Dashboard is mounted (the app requires a `userProfile` to render Dashboard in the normal flow).
-  - Use the demo `localStorage` snippet above to test quickly.
+
+**Connection issues**
+- If port `5432` is already used, map Docker to `5433` and set `PGPORT=5433`.  
+- Always prefer `PGHOST=127.0.0.1` over `localhost` on Windows.  
+- Verify container: `docker ps` should show `0.0.0.0:5432->5432/tcp`.
+
+**Password auth fails**
+```bash
+docker exec -it tg-postgres psql -U postgres -d postgres -c "ALTER ROLE postgres WITH PASSWORD 'postgres';"
+```
+
+**Gemini model error (404)**
+- Set `GEMINI_MODEL=gemini-1.5-flash-latest` in `.env`.  
+- Update `@google/generative-ai`.
+
+**curl JSON parse error on Windows**
+- In **cmd.exe** escape inner quotes with `\"…\"`.  
+- In **PowerShell**, wrap JSON in single quotes.
+
+---
 
 ## Contributing
-- Make changes in `frontend/` or `backend/`.
-- Run `npm run dev` locally and test.
-- Keep commits small and add tests where appropriate.
+- Work in `frontend/` and `backend/`.  
+- Test locally with `npm run dev`.  
+- Open PRs with clear descriptions.
+
+---
 
 ## License
-MIT
-- Event discovery based on user interests
-- Calendar integration
-- Group chat functionality
-- RSVP management
-
-## Contributing
-
-1. Make changes in the appropriate directory (`frontend/` or `backend/`)
-2. Test your changes using `npm run dev`
-3. Build and test production build before committing
-
-## License
-
 MIT
