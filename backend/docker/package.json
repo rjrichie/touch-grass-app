@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:nuke": "docker compose down -v",
+    "env:copy": "cp .env.example .env"
+  }
+}
