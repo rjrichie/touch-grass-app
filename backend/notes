@@ -1,0 +1,7 @@
+Users: id, first, last, email, password, totalSeen,totalAccepted
+UserInterests: uid, iid (one to many)
+UserTags: uid, tid (one to many)
+Interests: iid, interest, count, minCount, numEvents
+Tags: tid, tag, count
+Events: eid, name, datetime, interest, cost, numAttendees
+InterestEvents: iid, eid (one to many)

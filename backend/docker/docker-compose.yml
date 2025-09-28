@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: tg-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: touch_grass
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+volumes:
+  pgdata:
