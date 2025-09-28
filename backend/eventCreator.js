@@ -63,30 +63,52 @@ function conflict(existing, startISO, endISO) {
     });
 }
 
-function pickGoodDate(tz, withinDays, existing) {
+function pickGoodDate(tz, withinDays, existing,
+    {
+        minLeadDays = 7,          // >= 1 week in advance
+        preferred = {             // preferred weekly slots
+            Thu: [{ h: 19, m: 0 }],
+            Fri: [{ h: 19, m: 0 }],
+            Sat: [{ h: 11, m: 0 }, { h: 14, m: 0 }],
+            Sun: [{ h: 13, m: 0 }],
+        },
+    } = {}
+) {
     const now = DateTime.now().setZone(tz);
-    const cand = [];
-    for (let d = 0; d <= withinDays; d++) {
-        const day = now.plus({ days: d });
-        const w = day.weekday; // 1=Mon
-        if (w === 4 || w === 5) cand.push(day.set({ hour: 19, minute: 0, second: 0, millisecond: 0 })); // Thu/Fri 7pm
-        if (w === 6) { // Sat
-            cand.push(day.set({ hour: 11 }));
-            cand.push(day.set({ hour: 14 }));
+    const startDayOffset = Math.max(minLeadDays, 1);                // never same-day
+    const searchWindow = Math.max(withinDays, startDayOffset + 7);  // ensure window covers min lead
+
+    const weekdayKey = (w) => ({ 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun" }[w]);
+
+    const setSlot = (day, h, m = 0) =>
+        day.set({ hour: h, minute: m, second: 0, millisecond: 0 });
+
+    // 1) Preferred slots first (Thu/Fri/Sat/Sun), starting >= minLeadDays
+    for (let d = startDayOffset; d <= searchWindow; d++) {
+        const day = now.plus({ days: d }).startOf("day").setZone(tz);
+        const key = weekdayKey(day.weekday);
+        const slots = preferred[key] || [];
+        for (const { h, m } of slots) {
+            const slot = setSlot(day, h, m);
+            const iso = slot.toISO();
+            if (!iso) continue;
+            if (!conflict(existing, iso)) return iso;
         }
-        if (w === 7) cand.push(day.set({ hour: 13 })); // Sun 1pm
     }
-    for (const c of cand) {
-        const iso = c.toISO();
-        if (iso && !conflict(existing, iso)) return iso;
-    }
-    // fallback: next weekday 7pm
-    for (let d = 0; d <= withinDays; d++) {
-        const t = now.plus({ days: d }).set({ hour: 19, minute: 0, second: 0 });
+
+    // 2) Fallback: any weekday at 7:00 PM, still >= minLeadDays
+    for (let d = startDayOffset; d <= searchWindow; d++) {
+        const t = now.plus({ days: d }).set({ hour: 19, minute: 0, second: 0, millisecond: 0 });
         const iso = t.toISO();
-        if (iso && !conflict(existing, iso)) return iso;
+        if (!iso) continue;
+        if (!conflict(existing, iso)) return iso;
     }
-    return now.plus({ days: 3 }).set({ hour: 19 }).toISO();
+
+    // 3) Last resort: minLeadDays + 3 at 7 PM
+    return now
+        .plus({ days: startDayOffset + 3 })
+        .set({ hour: 19, minute: 0, second: 0, millisecond: 0 })
+        .toISO();
 }
 
 function baselineCostUSD(categoryOrIdea) {
@@ -138,7 +160,17 @@ async function ogImage(url) {
 }
 
 // ------------------ Phase 1: ideate (Gemini) ------------------
-// const genAI = new GoogleGenerativeAI(ENV.GEMINI_API_KEY);
+function cleanGeminiJson(raw) {
+    if (!raw) return null;
+    // Remove code fences like ```json ... ``` or just ```
+    let cleaned = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+    try {
+        return JSON.parse(cleaned);
+    } catch (err) {
+        console.error("Failed to parse Gemini output:", err.message);
+        return null;
+    }
+}
 const genAIModel = "gemini-2.5-pro"
 async function ideate(interest, city) {
     if (!ENV.GEMINI_API_KEY) {
@@ -162,22 +194,19 @@ async function ideate(interest, city) {
     }
     const genAI = new GoogleGenerativeAI(ENV.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: genAIModel });
-    const prompt = `You are brainstorming fast for Georgia Tech students in ${city}.\nReturn 15-25 ideas for the interest: "${interest}".\nHigh variety, safe, free+paid mix, use public venues/areas when possible.\nReturn in JSON format: {ideas: [{"title": string, "rationale": string, "tags": string[]}]}`;
+    const prompt = `You are brainstorming fast for Georgia Tech students in ${city}.\nReturn 15-25 ideas for the interest: "${interest}".\nHigh variety, safe, free+paid mix, use public venues/areas when possible.\nEnsure your output is VALID JSON FORMAT including all fields in double quotes: {"ideas": [{"title": string, "rationale": string, "tags": string[]}]}`;
     const res = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }]}] });
     const text = res.response.text();
-    console.log(text);
     try {
-        return JSON.parse(text)["ideas"];
+        const cleaned = cleanGeminiJson(text);
+        return cleaned["ideas"];
     } catch {
-        console.log("COULDN'T PARSE TEXT");
-        const manual_parsed = text
+        return text
             .split(/\n|\r/)
             .map(x => x.replace(/^[-*]\s*/, ""))
             .filter(Boolean)
             .slice(0, 15)
-            .map(t => ({ title: t }) );
-        console.log(manual_parsed);
-        return manual_parsed;
+            .map(t => ({title: t}));
     }
 }
 

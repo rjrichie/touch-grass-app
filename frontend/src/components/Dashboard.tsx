@@ -23,9 +23,10 @@ interface DashboardProps {
   onRemoveFromCalendar: (eventId: string) => void;
   onExportCalendar: () => void;
   onUpdateRSVP: (eventId: string, rsvpStatus: { isInterested: boolean; isAttending: boolean }) => void;
+  userId: string;
 }
 
-export function Dashboard({ userProfile, onProfileEdit, onLogout, onJoinGroupChat, calendarEvents, eventRSVPs, onAddToCalendar, onRemoveFromCalendar, onExportCalendar, onUpdateRSVP }: DashboardProps) {
+export function Dashboard({ userProfile, onProfileEdit, onLogout, onJoinGroupChat, calendarEvents, eventRSVPs, onAddToCalendar, onRemoveFromCalendar, onExportCalendar, onUpdateRSVP, userId }: DashboardProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('events');
   const [notifications, setNotifications] = useState([
@@ -104,7 +105,7 @@ export function Dashboard({ userProfile, onProfileEdit, onLogout, onJoinGroupCha
   };
 
   return (
-    <div className="min-h-screen bg-background texture-paper">
+    <div className="bg-background texture-paper">
       {/* Header */}
       <header className="bg-card border-b border-border px-4 py-3 texture-organic shadow-natural">
         <div className="flex items-center justify-between">
@@ -145,7 +146,8 @@ export function Dashboard({ userProfile, onProfileEdit, onLogout, onJoinGroupCha
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0 transition-transform duration-300 ease-in-out
           fixed lg:relative z-30 lg:z-0
-          w-80 bg-sidebar border-r border-sidebar-border h-screen overflow-y-auto
+          w-80 bg-sidebar border-r border-sidebar-border
+          h-full lg:h-auto lg:shadow-none shadow-xl
         `}>
           <div className="p-4 lg:hidden border-b border-sidebar-border">
             <Button
@@ -157,16 +159,10 @@ export function Dashboard({ userProfile, onProfileEdit, onLogout, onJoinGroupCha
               <X className="w-5 h-5" />
             </Button>
           </div>
-          <ProfileSidebar userProfile={userProfile} onEdit={onProfileEdit} onLogout={onLogout} />
+          <ProfileSidebar userProfile={userProfile} onEdit={onProfileEdit} onLogout={onLogout} userId={userId} />
         </div>
 
-        {/* Overlay for mobile */}
-        {isSidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
-            onClick={() => setIsSidebarOpen(false)}
-          />
-        )}
+        {/* No overlay - sidebar slides over content */}
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
@@ -250,6 +246,7 @@ export function Dashboard({ userProfile, onProfileEdit, onLogout, onJoinGroupCha
                   eventRSVPs={eventRSVPs}
                   onAddToCalendar={onAddToCalendar}
                   onUpdateRSVP={onUpdateRSVP}
+                  userId={userId}
                 />
               </TabsContent>
 

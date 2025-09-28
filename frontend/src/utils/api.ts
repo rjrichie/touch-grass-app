@@ -8,6 +8,15 @@ export const API_ENDPOINTS = {
     LOGIN: '/auth/login',
     LOGOUT: '/auth/logout',
     REFRESH: '/auth/refresh'
+  },
+  PROFILE: {
+    UPDATE: '/profile'
+  },
+  USER: {
+    GET: '/user'
+  },
+  EVENTS: {
+    GET: '/events'
   }
 };
 
@@ -32,6 +41,29 @@ export interface RegisterRequest {
   last: string;
   email: string;
   password: string;
+}
+
+export interface ProfileUpdateRequest {
+  uid: string;
+  first?: string;
+  last?: string;
+  interests?: string[];
+}
+
+export interface ProfileUpdateResponse {
+  uid: string;
+  status: string;
+}
+
+export interface UserStatsResponse {
+  id: string;
+  first: string;
+  last: string;
+  email: string;
+  interests: string[];
+  eventsSeen: number;
+  eventsAttended: number;
+  createdAt: string;
 }
 
 // Generic API call function
@@ -76,5 +108,34 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+  },
+};
+
+// Profile API functions
+export const profileAPI = {
+  update: async (profileData: ProfileUpdateRequest): Promise<ProfileUpdateResponse> => {
+    return apiCall<ProfileUpdateResponse>(API_ENDPOINTS.PROFILE.UPDATE, {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  },
+};
+
+// User API functions
+export const userAPI = {
+  getStats: async (userId: string): Promise<UserStatsResponse> => {
+    return apiCall<UserStatsResponse>(`${API_ENDPOINTS.USER.GET}/${userId}`, {
+      method: 'GET',
+    });
+  },
+};
+
+// Events API functions
+import { Event } from '../components/EventsData';
+
+export const eventsAPI = {
+  getEvents: async (userId?: string): Promise<Event[]> => {
+    const endpoint = userId ? `${API_ENDPOINTS.EVENTS.GET}?uid=${userId}` : API_ENDPOINTS.EVENTS.GET;
+    return apiCall<Event[]>(endpoint, { method: 'GET' });
   },
 };

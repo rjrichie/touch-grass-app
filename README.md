@@ -45,7 +45,6 @@ touch-grass-app/
    - Create a `.env` file in the `backend` directory with your database credentials:
      ```
      DATABASE_URL=postgresql://username:password@localhost:5432/database_name
-     JWT_SECRET=your_jwt_secret_key
      PORT=4000
      ```
 
